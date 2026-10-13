@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+.pytest_cache/
+data/
+reference/
+results/*.npz
+results/log_*.txt
+ISSUE_DRAFT.md
