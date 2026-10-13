@@ -81,7 +81,7 @@ Glasgow City around the tariff change:
 - **Lighter base forecasts.** I use gradient boosting for stations and regions and ridge regression for the national series, in place of the paper's average of random forest, GAM, XGBoost and TabICL. Differences from the paper could partly come from this.
 - **Five calibration splits, not ten.**
 - **The simulation is small and stylised**: 12 stations, 15% of station-days inactive (the real figure is 46%), no time dependence.
-- **The two code discrepancies have not been raised with the authors.** They are differences between the released code and, respectively, the paper's stated definition and the set the routine is meant to compute.
+- **The two code discrepancies are reported to the authors but not yet confirmed by them** ([issue #1](https://github.com/PrincipatoG/Probabilistic-Hierarchical-EV/issues/1)). They are differences between the released code and, respectively, the paper's stated definition and the set the routine is meant to compute.
 - **I did not reproduce** the paper's 0% national validity for the adaptive method; here it was valid in 3 of 5 splits.
 
 ## Reproducing
