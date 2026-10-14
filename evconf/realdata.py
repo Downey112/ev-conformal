@@ -20,7 +20,8 @@ from .conformal import adaptive_cp_mnr, cp_mnr_nested_star, split_quantile
 from .hierarchy import make_fast_projector
 
 METHODS = ["CP", "CP-MNR (code quantile)", "CP-MNR (n+1 quantile)",
-           "Nested* (released code)", "Nested* (exact set)", "Adaptive CP-MNR"]
+           "Nested* (released code)", "Nested* (exact set)", "Nested* (corrected)",
+           "Adaptive CP-MNR"]
 DAY = np.timedelta64(1, "D")
 
 
@@ -121,7 +122,7 @@ def run_seed(panel, p, seed, log=print):
             lo[name], up[name] = mu[t] - q, mu[t] + q
         lo["Adaptive CP-MNR"], up["Adaptive CP-MNR"], state = adaptive_cp_mnr(
             s_act, mu[t], Y0[t], A[t], p.alpha, state, p.gamma)
-        for v in ("released code", "exact set"):
+        for v in ("released code", "exact set", "corrected"):
             lo[f"Nested* ({v})"] = np.full(mu[t].shape, np.nan)
             up[f"Nested* ({v})"] = np.full(mu[t].shape, np.nan)
         for j in range(len(te)):
@@ -129,6 +130,7 @@ def run_seed(panel, p, seed, log=print):
                                    p.alpha, p.max_diff)
             lo["Nested* (released code)"][j], up["Nested* (released code)"][j] = r["released"]
             lo["Nested* (exact set)"][j], up["Nested* (exact set)"][j] = r["exact"]
+            lo["Nested* (corrected)"][j], up["Nested* (corrected)"][j] = r["corrected"]
 
         res["date"].append(dates[te]); res["Y"].append(Y0[t]); res["A"].append(A[t]); res["pred"].append(mu[t])
         for k in METHODS:

@@ -75,13 +75,17 @@ def cp_mnr_nested_star(Y0_cal, Yhat_cal, A_cal, yhat_t, a_t, project, n_sta, alp
     A_* are node-activity masks whose last n_sta columns are the stations.
     project(station_active (k, n_sta), V (k, m)) applies the refined projection
     of each pattern to the matching row of V.
-    Returns {"released" | "exact": (lower, upper)} with arrays of length m.
+    Returns {"released" | "exact" | "corrected": (lower, upper)} with arrays of
+    length m. "corrected" is "exact" except when the threshold is 0 (between 1
+    and 1/alpha - 1 valid scores): every y then qualifies, so the set is the
+    whole line, where the released code returns the hull of the calibration
+    intervals. Nodes with no valid score stay undefined (NaN) in all variants.
     """
     keep = np.ones(len(A_cal), bool)
     if max_diff is not None:
         keep = (A_cal != a_t).sum(1) <= max_diff
     m = Y0_cal.shape[1]
-    res = {v: (np.full(m, np.nan), np.full(m, np.nan)) for v in ("released", "exact")}
+    res = {v: (np.full(m, np.nan), np.full(m, np.nan)) for v in ("released", "exact", "corrected")}
     if not keep.any():
         return res
     A_comb = A_cal[keep] & a_t                     # node-level pmax of the missing masks
@@ -92,7 +96,9 @@ def cp_mnr_nested_star(Y0_cal, Yhat_cal, A_cal, yhat_t, a_t, project, n_sta, alp
     lo, up = mu - np.abs(score), mu + np.abs(score)
     n_valid = (~np.isnan(score)).sum(0)
     for j in np.nonzero(a_t & (n_valid > 0))[0]:
-        iv = nested_interval(lo[:, j], up[:, j], nested_threshold(alpha, int(n_valid[j])))
+        thr = nested_threshold(alpha, int(n_valid[j]))
+        iv = nested_interval(lo[:, j], up[:, j], thr)
+        iv["corrected"] = (-np.inf, np.inf) if thr == 0 else iv["exact"]
         for v in res:
             res[v][0][j], res[v][1][j] = iv[v]
     return res

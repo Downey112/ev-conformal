@@ -1,6 +1,6 @@
 import numpy as np
 
-from evconf.conformal import nested_interval, split_quantile
+from evconf.conformal import cp_mnr_nested_star, nested_interval, split_quantile
 from evconf.hierarchy import (all_projections, make_fast_projector, node_activity,
                               pattern_code, refined_projection, summing_matrix)
 
@@ -80,3 +80,23 @@ def test_fast_projector_matches_dense():
     got = make_fast_projector(region_of)(act, V)
     want = np.stack([refined_projection(S, a) @ v for a, v in zip(act, V)])
     assert np.allclose(got, want)
+
+
+
+def test_nested_star_corrected_whole_line_below_threshold():
+    region_of = np.array([0, 0, 1, 1])
+    S = summing_matrix(region_of)
+    project = make_fast_projector(region_of)
+    rng = np.random.default_rng(4)
+    sta = np.ones((30, 4), bool)
+    A = node_activity(sta, region_of)
+    Y = (S @ rng.uniform(1, 2, (30, 4)).T).T
+    Yhat = Y + rng.normal(0, 0.1, Y.shape)
+    a_t, yhat_t = A[0], S @ np.full(4, 1.5)
+    # 30 scores: threshold floor(0.1 * 31) = 3, corrected = exact, both finite
+    r = cp_mnr_nested_star(Y, Yhat, A, yhat_t, a_t, project, 4, 0.1)
+    assert np.allclose(r["corrected"], r["exact"]) and np.isfinite(r["exact"]).all()
+    # 8 scores: threshold 0, every y qualifies; released and exact stay finite
+    r8 = cp_mnr_nested_star(Y[:8], Yhat[:8], A[:8], yhat_t, a_t, project, 4, 0.1)
+    assert (r8["corrected"][0] == -np.inf).all() and (r8["corrected"][1] == np.inf).all()
+    assert np.isfinite(r8["exact"]).all() and np.isfinite(r8["released"]).all()
