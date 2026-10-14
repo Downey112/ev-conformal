@@ -6,3 +6,4 @@ reference/
 results/*.npz
 results/log_*.txt
 ISSUE_DRAFT.md
+ISSUE_COMMENT_DRAFT.md

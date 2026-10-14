@@ -12,7 +12,7 @@ The first half of this page is written for readers with no statistics background
 - A range is only useful if it is honest. A "90% range" should contain the real figure about 9 days out of 10.
 - The paper recommends a sophisticated method for building these ranges, because it scores best on the paper's own test.
 - I found that the test favours ranges that are wider than they need to be. Scored fairly, a much simpler method does just as well and gives tighter, more useful ranges.
-- I also found two small mistakes in the computer code released with the paper, and reported them to the authors.
+- I also found three places where the computer code released with the paper does not do what the paper describes, and reported them to the authors.
 
 ## Background, in plain terms
 
@@ -59,6 +59,8 @@ It has one drawback: for stations with very little history (about 2 in every 100
 
 The recommended method's code contains a step that shifts both ends of every range slightly downward. I found it by checking the code's output against a slow but obviously correct calculation. Fixing it drops the recommended method's pass rate from 73% to 67%.
 
+A second, related slip: when a station has fewer than 9 comparable past days, the method's own rule says it cannot put any limit on the range, but the code still returns a finite one. Making it honest, the same way as the corrected simple method above, brings the pass rate back to 72% (coverage 91.7%), with the same 2 in 100 station-days left without a usable range. Fully corrected, the recommended method does no better than the corrected simple method, and its ranges are about 19% wider.
+
 ### 4. The authors' own worry turned out not to matter
 
 The authors note that their mathematical guarantee relies on an assumption that cannot be true in this setting. I tested this directly in a simulation where I could control how badly the assumption was broken. Breaking it made no difference to how often the ranges were right.
@@ -84,7 +86,7 @@ In April 2023, Glasgow introduced a new pricing scheme for its chargers, and usa
 | Recommended method (CP-MNR-Nested⋆) | 74% | 73% |
 | Self-adjusting method (Adaptive CP-MNR) | 58% | 58% |
 
-**The authors have been told.** I reported the two code issues to them ([issue #1](https://github.com/PrincipatoG/Probabilistic-Hierarchical-EV/issues/1)). They have not yet confirmed or disputed them.
+**The authors have been told.** I reported the code issues to them ([issue #1](https://github.com/PrincipatoG/Probabilistic-Hierarchical-EV/issues/1)). They have not yet confirmed or disputed them.
 
 **The limits of this work are listed** in the technical section below.
 
@@ -127,6 +129,7 @@ How often ranges were right, split by how many stations were out of action. No m
 - **Validity rate.** With each node's number of active test days, a method with exact 90% coverage has an expected validity rate of about 53% (binomial benchmark). The metric therefore ranks over-coverage above calibration.
 - **Quantile rule.** The paper (Section 3.2, Eq. 8) defines the calibration quantile with the `n+1` finite-sample correction. `CP_MNR` in the released code uses `quantile(probs = 1 - alpha, type = 1)`. Restoring the correction yields infinite intervals when a node has fewer than 9 active calibration days.
 - **Nested⋆ interval routine.** The closure step `inside | c(inside[-1], FALSE)` in `nested_component` extends one endpoint to the left, so the returned bounds are one order statistic below the hull of `{y : count >= thr}` at both ends. A brute-force test is in `tests/test_core.py`.
+- **Nested⋆ with few scores.** With `n` valid calibration scores the threshold is `floor(alpha (n+1))`, which is 0 for `n <= 8` at `alpha = 0.1`. Every `y` then qualifies, so the set is the whole line, but `nested_component` returns the hull of the calibration intervals. The "corrected" variant returns `(-inf, inf)` there (2.4% of station-days on the paper's test period, the same cut-off as the `n+1` quantile).
 - **Assumption 3 (activity independent of `(x, y)`).** In simulation with exchangeable days, marginal coverage is flat as the correlation between activity and demand noise goes from 0 to 0.9. Coverage conditional on the activity regime fails for all methods (regional nodes with no station off: 0.867 for CP-MNR, 0.898 for Nested⋆; with two or more off: 0.979 and 0.995).
 
 ## Station-level results on the paper's test period
@@ -138,6 +141,7 @@ How often ranges were right, split by how many stations were out of action. No m
 | CP-MNR, `n+1` quantile | 0.922 | 72.9% | 413 |
 | CP-MNR-Nested⋆, released code | 0.922 | 72.5% | 486 |
 | CP-MNR-Nested⋆, exact interval routine | 0.912 | 67.1% | 487 |
+| CP-MNR-Nested⋆, exact routine and infinite below 9 scores | 0.917 | 71.9% | 491 |
 | Adaptive CP-MNR | 0.907 | 57.9% | 388 |
 
 Full tables for all levels and periods are in `results/real_summary.csv`; simulation results are in `results/sim.csv`.
@@ -148,7 +152,7 @@ Full tables for all levels and periods are in `results/real_summary.csv`; simula
 
 **Real data.** The authors' processed ChargePlace Scotland tables (October 2022 to October 2025): 1,398 stations, 32 local authorities and the national total. The protocol follows theirs: 14-day test windows, models refit for each window, calibration on a random 20% of historical weeks plus the week before the test window, 90% target. Results are averaged over 5 random calibration splits.
 
-**Methods compared.** Plain split conformal (CP), CP-MNR, CP-MNR-Nested⋆ and Adaptive CP-MNR, each transcribed from the released R code, plus two corrected variants: CP-MNR with the `n+1` quantile and Nested⋆ with an exact interval routine.
+**Methods compared.** Plain split conformal (CP), CP-MNR, CP-MNR-Nested⋆ and Adaptive CP-MNR, each transcribed from the released R code, plus corrected variants: CP-MNR with the `n+1` quantile, Nested⋆ with an exact interval routine, and Nested⋆ with the exact routine and an infinite interval when fewer than 9 scores are available. Mean lengths are over finite intervals.
 
 **Scaling.** The authors report needing close to 36 GB of RAM. This runs on an 8 GB laptop because the reconciliation step never forms a 1,431 x 1,431 projection matrix: for a three-level hierarchy the normal equations reduce, by the Woodbury identity, to a 33 x 33 solve per activity pattern (`evconf/hierarchy.py`).
 
@@ -157,7 +161,8 @@ Full tables for all levels and periods are in `results/real_summary.csv`; simula
 - **Lighter base forecasts.** I use gradient boosting for stations and regions and ridge regression for the national series, in place of the paper's average of random forest, GAM, XGBoost and TabICL. Differences from the paper could partly come from this.
 - **Five calibration splits, not ten.**
 - **The simulation is small and stylised**: 12 stations, 15% of station-days inactive (the real figure is 46%), no time dependence.
-- **The two code discrepancies are reported to the authors but not yet confirmed by them** ([issue #1](https://github.com/PrincipatoG/Probabilistic-Hierarchical-EV/issues/1)). They are differences between the released code and, respectively, the paper's stated definition and the set the routine is meant to compute.
+- **The code discrepancies are reported to the authors but not yet confirmed by them** ([issue #1](https://github.com/PrincipatoG/Probabilistic-Hierarchical-EV/issues/1)). They are differences between the released code and, respectively, the paper's stated definition, the set the routine is meant to compute, and the counting rule when fewer than 9 scores are available.
+- **Regions with no station active on both days.** Nested⋆ combines the activity masks node by node, so a region can count as active on a calibration day and the test day through different stations. The joint pattern then holds none of its stations, the projection sends the region to 0 on both days, and its score is the whole regional demand. This is wide but not wrong: the score and the test error are built the same way, so they stay exchangeable. It affects about 0.6% of regional scores in a sample of day pairs; dropping those scores instead narrows regional intervals by about 1%. Left as in the released code.
 - **I did not reproduce** the paper's 0% national validity for the adaptive method; here it was valid in 3 of 5 splits. The national level is a single node and too noisy to compare.
 
 ## Reproducing
@@ -184,7 +189,7 @@ python -m venv .venv
 | Path | Contents |
 |---|---|
 | `evconf/hierarchy.py` | Summing matrix, activity patterns, fast refined projection |
-| `evconf/conformal.py` | The conformal procedures and the two corrected variants |
+| `evconf/conformal.py` | The conformal procedures and the corrected variants |
 | `evconf/simulate.py` | Synthetic hierarchy and one simulation replication |
 | `evconf/data.py`, `evconf/realdata.py` | Data loading, features, rolling-window experiment |
 | `scripts/` | Run and plotting scripts |
